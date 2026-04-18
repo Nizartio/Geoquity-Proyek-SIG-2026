@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
 import L, { GeoJSON as LeafletGeoJSON } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Feature, GeoJsonObject } from 'geojson';
 import type { ProvinceData } from '../utils/inequality';
 import { getColor } from '../utils/colorScale';
-import geoData from '../data/indonesia.geojson';
+import { indonesiaProvinceGeoJson, normalizeProvinceName } from '../data/indonesia-province-normalized';
 
 interface MapProps {
   /** All province data records (with inequality index computed) */
@@ -28,7 +27,7 @@ export default function Map({ data, selected, onSelect }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   /** Build a lookup map for O(1) access by province name */
-  const dataMap = Object.fromEntries(data.map((d) => [d.province, d]));
+  const dataMap = Object.fromEntries(data.map((d) => [normalizeProvinceName(d.province), d]));
 
   // ── Initialise map once ──────────────────────────────────────────────────
   useEffect(() => {
@@ -64,9 +63,9 @@ export default function Map({ data, selected, onSelect }: MapProps) {
       geoLayerRef.current.remove();
     }
 
-    const layer = L.geoJSON(geoData as GeoJsonObject, {
+    const layer = L.geoJSON(indonesiaProvinceGeoJson, {
       style: (feature) => {
-        const name = (feature as Feature)?.properties?.name as string | undefined;
+        const name = (feature?.properties as { name?: string } | undefined)?.name;
         const record = name ? dataMap[name] : undefined;
         const isSelected = name === selected;
 
@@ -79,7 +78,8 @@ export default function Map({ data, selected, onSelect }: MapProps) {
         };
       },
       onEachFeature: (feature, featureLayer) => {
-        const name = (feature as Feature)?.properties?.name as string | undefined;
+        const rawName = (feature.properties as { name?: string } | undefined)?.name;
+        const name = normalizeProvinceName(rawName);
         if (!name) return;
 
         const record = dataMap[name];
