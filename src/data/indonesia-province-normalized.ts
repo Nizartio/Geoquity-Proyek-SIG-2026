@@ -1,5 +1,5 @@
 import type { FeatureCollection, Geometry } from 'geojson';
-import rawGeoJson from './indonesia-provinces.json';
+import rawGeoJsonUrl from './indonesia-provinces.json?url';
 
 type RawProvinceProperties = {
   ID?: number;
@@ -14,12 +14,15 @@ type NormalizedProvinceProperties = RawProvinceProperties & {
   name: string;
 };
 
+type NormalizedProvinceGeoJson = FeatureCollection<Geometry, NormalizedProvinceProperties>;
+
 const provinceNameMap: Record<string, string> = {
   'BALI': 'Bali',
   'BANGKA BELITUNG': 'Kepulauan Bangka Belitung',
   'BENGKULU': 'Bengkulu',
   'DAERAH KHUSUS IBUKOTA JAKARTA': 'DKI Jakarta',
   'DAERAH ISTIMEWA YOGYAKARTA': 'DI Yogyakarta',
+  'DI YOGYAKARTA': 'DI Yogyakarta',
   'DI. ACEH': 'Aceh',
   'DI ACEH': 'Aceh',
   'DKI JAKARTA': 'DKI Jakarta',
@@ -76,15 +79,32 @@ export function normalizeProvinceName(rawName?: string): string {
   return provinceNameMap[normalizedKey] ?? toTitleCase(normalizedKey);
 }
 
-const featureCollection = rawGeoJson as FeatureCollection<Geometry, RawProvinceProperties>;
+let cachedGeoJson: NormalizedProvinceGeoJson | null = null;
 
-export const indonesiaProvinceGeoJson: FeatureCollection<Geometry, NormalizedProvinceProperties> = {
-  type: 'FeatureCollection',
-  features: featureCollection.features.map((feature) => ({
-    ...feature,
-    properties: {
-      ...feature.properties,
-      name: normalizeProvinceName(feature.properties?.PROVINSI ?? feature.properties?.Propinsi),
-    },
-  })),
-};
+function normalizeGeoJson(
+  featureCollection: FeatureCollection<Geometry, RawProvinceProperties>
+): NormalizedProvinceGeoJson {
+  return {
+    type: 'FeatureCollection',
+    features: featureCollection.features.map((feature) => ({
+      ...feature,
+      properties: {
+        ...feature.properties,
+        name: normalizeProvinceName(feature.properties?.PROVINSI ?? feature.properties?.Propinsi),
+      },
+    })),
+  };
+}
+
+export async function loadIndonesiaProvinceGeoJson(): Promise<NormalizedProvinceGeoJson> {
+  if (cachedGeoJson) return cachedGeoJson;
+
+  const response = await fetch(rawGeoJsonUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to load province GeoJSON: ${response.status}`);
+  }
+
+  const rawGeoJson = (await response.json()) as FeatureCollection<Geometry, RawProvinceProperties>;
+  cachedGeoJson = normalizeGeoJson(rawGeoJson);
+  return cachedGeoJson;
+}
