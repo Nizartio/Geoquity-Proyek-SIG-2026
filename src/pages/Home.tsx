@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import StatsCard from '../components/StatsCard';
 import Filter from '../components/Filter';
+import YearSlider from '../components/YearSlider';
 import { fetchProvinceData } from '../services/api';
 import { computeStats, type ProvinceData } from '../utils/inequality';
 
@@ -8,13 +9,16 @@ const Map = lazy(() => import('../components/Map'));
 const Dashboard = lazy(() => import('../components/Dashboard'));
 
 export default function Home() {
+  const [year, setYear] = useState<number>(2025);
   const [data, setData] = useState<ProvinceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
+  const [isTrayOpen, setIsTrayOpen] = useState(true);
 
   useEffect(() => {
-    fetchProvinceData()
+    setLoading(true);
+    fetchProvinceData(year)
       .then((d) => {
         setData(d);
         setLoading(false);
@@ -23,7 +27,7 @@ export default function Home() {
         setError(err instanceof Error ? err.message : 'Gagal memuat data.');
         setLoading(false);
       });
-  }, []);
+  }, [year]);
 
   const displayData = selectedProvinces.length
     ? data.filter((d) => selectedProvinces.includes(d.province))
@@ -114,8 +118,9 @@ export default function Home() {
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
               <span className="rounded-full bg-[#0f5f79] px-2.5 py-1 text-white font-semibold shadow-sm">
-                Data: BPS {new Date().getFullYear()}
+                Data: BPS {year}
               </span>
+              <YearSlider min={2020} max={2025} value={year} onChange={setYear} />
               <button
                 type="button"
                 onClick={() => setSelectedProvinces([])}
@@ -206,16 +211,30 @@ export default function Home() {
         </aside>
 
         <section className="pointer-events-auto absolute left-2.5 right-2.5 sm:left-[264px] sm:right-[180px] bottom-2.5 sm:bottom-3 z-20">
-          <div className="rounded-[20px] border border-white/55 bg-white/54 backdrop-blur-xl shadow-[0_12px_30px_rgba(15,95,121,0.08)] p-2 sm:p-2.5 h-[176px] overflow-hidden">
-            <div className="flex items-center justify-between gap-2 mb-2">
+          <div className={`rounded-[20px] border border-white/55 bg-white/54 backdrop-blur-xl shadow-[0_12px_30px_rgba(15,95,121,0.08)] p-2 sm:p-2.5 overflow-hidden transition-all duration-300 ease-in-out ${isTrayOpen ? 'h-[216px]' : 'h-[52px] sm:h-[56px]'}`}>
+            <div 
+              className="flex items-center justify-between gap-2 mb-2 cursor-pointer group" 
+              onClick={() => setIsTrayOpen(!isTrayOpen)}
+            >
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#0f5f79]">Bottom tray</p>
                 <h3 className="mt-0.5 text-sm sm:text-base font-bold text-slate-900">Grafik horizontal</h3>
               </div>
-              <span className="hidden sm:block text-xs text-slate-500">Scroll kanan untuk grafik</span>
+              <div className="flex items-center gap-3">
+                <span className="hidden sm:block text-xs text-slate-500 transition-opacity duration-300" style={{ opacity: isTrayOpen ? 1 : 0 }}>Scroll kanan untuk grafik</span>
+                <button
+                  type="button"
+                  className="p-1.5 rounded-full hover:bg-white/60 text-slate-600 transition-colors shadow-sm bg-white/40 border border-white/50"
+                  aria-label={isTrayOpen ? "Tutup Tray" : "Buka Tray"}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-300 ${isTrayOpen ? 'rotate-180' : ''}`}>
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <div className="h-[118px] overflow-x-auto overflow-y-hidden pb-1">
+            <div className={`h-[158px] overflow-x-auto overflow-y-hidden pb-1 transition-opacity duration-300 ${isTrayOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               <div className="flex gap-4 min-w-max snap-x snap-mandatory">
                 <div className="snap-start min-w-[340px] lg:min-w-[460px] xl:min-w-[560px]">
                   <Suspense fallback={sectionLoader}>

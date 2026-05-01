@@ -6,7 +6,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { normalizeProvinceName } from '../data/indonesia-province-normalized';
-import { enrichWithInequality, ProvinceData } from '../utils/inequality';
+import { ProvinceData } from '../utils/inequality';
 
 /** Supabase credentials (publishable/anon key) */
 const SUPABASE_URL = 'https://jkylndmvrladdaryrrlw.supabase.co';
@@ -29,7 +29,7 @@ const SIMULATED_DELAY_MS = 600;
  * - persen_miskin
  * - rasio_gini
  */
-export async function fetchProvinceData(): Promise<ProvinceData[]> {
+export async function fetchProvinceData(year: number = 2025): Promise<ProvinceData[]> {
   // Keep a small artificial delay for consistent UX
   await new Promise((resolve) => setTimeout(resolve, SIMULATED_DELAY_MS));
 
@@ -46,7 +46,7 @@ export async function fetchProvinceData(): Promise<ProvinceData[]> {
   const { data, error } = await supabase
     .from('data_ketimpangan')
     .select('kode_provinsi, nama_provinsi, tahun, pdrb_per_kapita, persen_miskin, rasio_gini')
-    .eq('tahun', 2025);
+    .eq('tahun', year);
 
   if (error) {
     console.error('Supabase fetch error:', error);
@@ -63,7 +63,7 @@ export async function fetchProvinceData(): Promise<ProvinceData[]> {
   };
 
   // Canonicalize province names and keep only one row per province code/name.
-  const deduped = new Map<string, Omit<ProvinceData, 'inequality'>>();
+  const deduped = new Map<string, ProvinceData>();
 
   for (const row of (data ?? []) as ProvinceRow[]) {
     const province = normalizeProvinceName(row.nama_provinsi);
@@ -76,9 +76,10 @@ export async function fetchProvinceData(): Promise<ProvinceData[]> {
         province,
         poverty: parseNumber(row.persen_miskin),
         income: parseNumber(row.pdrb_per_kapita),
+        inequality: parseNumber(row.rasio_gini),
       });
     }
   }
 
-  return enrichWithInequality([...deduped.values()]);
+  return [...deduped.values()];
 }
