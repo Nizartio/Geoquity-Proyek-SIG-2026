@@ -1,29 +1,29 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useMemo, useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import StatsCard from '../components/StatsCard';
 import Filter from '../components/Filter';
-import { fetchProvinceData } from '../services/api';
+import YearSlider from '../components/YearSlider';
+import { fetchProvinceData, fetchYearRange } from '../services/api';
 import { computeStats, type ProvinceData } from '../utils/inequality';
 
 const Map = lazy(() => import('../components/Map'));
 const Dashboard = lazy(() => import('../components/Dashboard'));
 
-/**
- * Home page – the single page of the Geoquity GIS Dashboard.
- *
- * Layout (responsive):
- *   - Header bar
- *   - Stats row (3 cards)
- *   - Main content: Map (left) + Dashboard charts (right)
- */
 export default function Home() {
+  const [year, setYear] = useState<number>(2025);
+  const [minYear, setMinYear] = useState<number>(2020);
+  const [maxYear, setMaxYear] = useState<number>(2025);
   const [data, setData] = useState<ProvinceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
+  const [isTrayOpen, setIsTrayOpen] = useState(true);
+  const [isLeftOpen, setIsLeftOpen] = useState(true);
+  const [isRightOpen, setIsRightOpen] = useState(true);
+  const [recenterSignal, setRecenterSignal] = useState(0);
 
-  // ── Load data on mount ─────────────────────────────────────────────────
   useEffect(() => {
-    fetchProvinceData()
+    setLoading(true);
+    fetchProvinceData(year)
       .then((d) => {
         setData(d);
         setLoading(false);
@@ -32,53 +32,88 @@ export default function Home() {
         setError(err instanceof Error ? err.message : 'Gagal memuat data.');
         setLoading(false);
       });
+  }, [year]);
+
+  // Load available year range on mount
+  useEffect(() => {
+    let mounted = true;
+    fetchYearRange()
+      .then(({ earliest_year, latest_year }) => {
+        if (!mounted) return;
+        if (earliest_year) setMinYear(earliest_year);
+        if (latest_year) {
+          setMaxYear(latest_year);
+          setYear(latest_year);
+        }
+      })
+      .catch((err: unknown) => {
+        // keep defaults if error
+        console.error(err);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // ── Derived state ──────────────────────────────────────────────────────
   const displayData = selectedProvinces.length
     ? data.filter((d) => selectedProvinces.includes(d.province))
     : data;
   const stats = computeStats(displayData);
   const primarySelected = selectedProvinces.length === 1 ? selectedProvinces[0] : '';
 
-  const handleSelect = useCallback(
-    (province: string, additive: boolean) => {
-      setSelectedProvinces((prev) => {
-        if (!additive) {
-          return prev.length === 1 && prev[0] === province ? [] : [province];
-        }
-
-        return prev.includes(province) ? prev.filter((p) => p !== province) : [...prev, province];
-      });
-    },
-    []
+  const statsCards = useMemo(
+    () => [
+      {
+        title: 'Rata-rata Kemiskinan',
+        value: `${stats.avgPoverty}%`,
+        accent: 'bg-rose-500',
+      },
+      {
+        title: 'Pendapatan Per Kapita',
+        value: `Rp ${stats.avgIncome.toLocaleString('id-ID')} rb`,
+        accent: 'bg-emerald-500',
+      },
+      {
+        title: 'Indeks Ketimpangan',
+        value: stats.avgInequality.toString(),
+        accent: 'bg-amber-500',
+      },
+    ],
+    [stats.avgIncome, stats.avgInequality, stats.avgPoverty]
   );
 
-  const sectionLoader = (
-    <div className="w-full h-full min-h-[220px] bg-white rounded-2xl shadow-md animate-pulse" />
-  );
+  const handleSelect = useCallback((province: string, additive: boolean) => {
+    setSelectedProvinces((prev) => {
+      if (!additive) {
+        return prev.length === 1 && prev[0] === province ? [] : [province];
+      }
 
-  // ── Loading skeleton ───────────────────────────────────────────────────
+      return prev.includes(province) ? prev.filter((p) => p !== province) : [...prev, province];
+    });
+  }, []);
+
+  const sectionLoader = <div className="w-full h-full min-h-[100px] rounded-3xl bg-white/70 shadow-md animate-pulse" />;
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
-          <p className="text-gray-500 text-sm">Memuat data provinsi…</p>
+      <div className="flex items-center justify-center min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeaf4,_#eef4f8_50%,_#d7e3ee_100%)]">
+        <div className="flex flex-col items-center gap-4 rounded-3xl bg-white/80 backdrop-blur px-8 py-10 shadow-xl border border-white/60">
+          <div className="w-12 h-12 rounded-full border-4 border-[#2596be] border-t-transparent animate-spin" />
+          <p className="text-slate-600 text-sm font-medium">Memuat data provinsi…</p>
         </div>
       </div>
     );
   }
 
-  // ── Error state ────────────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="bg-white rounded-2xl shadow p-8 max-w-md text-center">
+      <div className="flex items-center justify-center min-h-screen bg-[radial-gradient(circle_at_top_left,_#dbeaf4,_#eef4f8_50%,_#d7e3ee_100%)]">
+        <div className="bg-white/90 backdrop-blur rounded-3xl shadow-xl p-8 max-w-md text-center border border-white/60">
           <p className="text-red-500 font-semibold text-lg mb-2">Terjadi Kesalahan</p>
           <p className="text-gray-500 text-sm">{error}</p>
           <button
-            className="mt-4 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+            className="mt-4 px-5 py-2 bg-[#2596be] text-white rounded-lg text-sm hover:opacity-90"
             onClick={() => window.location.reload()}
           >
             Coba Lagi
@@ -89,113 +124,197 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-              🗺️ Geoquity
-            </h1>
-            <p className="text-blue-200 text-xs sm:text-sm mt-0.5">
-              Dashboard Ketimpangan Ekonomi per Provinsi – Indonesia
-            </p>
-          </div>
-          <span className="hidden sm:block text-blue-300 text-xs">
-            Data: BPS {new Date().getFullYear()}
-          </span>
-        </div>
-      </header>
+    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_#dbeaf4,_#eef4f8_40%,_#d3e0eb_100%)] text-slate-900">
+      <div className="absolute inset-0 z-0">
+        <Suspense fallback={sectionLoader}>
+          <Map data={data} selected={selectedProvinces} onSelect={handleSelect} recenterSignal={recenterSignal} year={year} />
+        </Suspense>
+      </div>
 
-      {/* ── Main content ────────────────────────────────────────────────── */}
-      <main className="flex-1 max-w-screen-xl mx-auto w-full px-4 sm:px-6 py-6 flex flex-col gap-5">
-        {/* Filter + selected province label */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Filter
-            provinces={data.map((d) => d.province)}
-            selected={primarySelected}
-            onChange={(province) => setSelectedProvinces(province ? [province] : [])}
-          />
-          {selectedProvinces.length > 0 && (
-            <span className="text-sm text-blue-700 font-medium">
-              Menampilkan:{' '}
-              <strong>
-                {selectedProvinces.length === 1
-                  ? selectedProvinces[0]
-                  : `${selectedProvinces.length} provinsi terpilih`}
-              </strong>
+      <div className="absolute inset-0 z-10 pointer-events-none">
+        <header className="pointer-events-auto px-2.5 sm:px-3 pt-2.5 sm:pt-3">
+          <div className="rounded-[20px] bg-white/56 backdrop-blur-xl border border-white/55 shadow-[0_12px_30px_rgba(15,95,121,0.08)] px-3 sm:px-4 py-2.5 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-[#e9f4f8] flex items-center justify-center shadow-inner">
+                <img src="/Logo.png" alt="Logo Geoquity" className="h-8 w-8 object-contain" />
+              </div>
+              <div>
+                <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900">Geoquity</h1>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">Dashboard ketimpangan ekonomi per provinsi dengan peta full-bleed dan UI overlay.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+              <span className="rounded-full bg-[#0f5f79] px-2.5 py-1 text-white font-semibold shadow-sm">
+                Data: BPS {year}
+              </span>
+              <YearSlider min={minYear} max={maxYear} value={year} onChange={setYear} />
+            <div className="flex flex-col gap-1 sm:gap-2">
               <button
-                onClick={() => setSelectedProvinces([])}
-                className="ml-2 text-gray-400 hover:text-gray-600 text-xs underline"
+              type="button"
+              onClick={() => setRecenterSignal((prev) => prev + 1)}
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 hover:bg-slate-50"
               >
-                Reset
+                Kembali ke Indonesia
               </button>
-            </span>
-          )}
-        </div>
+              <button
+              type="button"
+              onClick={() => setSelectedProvinces([])}
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 hover:bg-slate-50"
+              >
+                Reset pilihan
+              </button>
+            </div>
+              
+            </div>
+          </div>
+        </header>
 
-        {/* Stats cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatsCard
-            title="Rata-rata Kemiskinan"
-            value={`${stats.avgPoverty}%`}
-              sub={
-                selectedProvinces.length === 0
-                  ? 'Semua Provinsi'
-                  : selectedProvinces.length === 1
-                    ? selectedProvinces[0]
-                    : `${selectedProvinces.length} Provinsi`
-              }
-            accent="bg-red-500"
-          />
-          <StatsCard
-            title="Rata-rata Pendapatan Per Kapita"
-            value={`Rp ${stats.avgIncome.toLocaleString('id-ID')} rb`}
-              sub={
-                selectedProvinces.length === 0
-                  ? 'Semua Provinsi'
-                  : selectedProvinces.length === 1
-                    ? selectedProvinces[0]
-                    : `${selectedProvinces.length} Provinsi`
-              }
-            accent="bg-green-500"
-          />
-          <StatsCard
-            title="Rata-rata Indeks Ketimpangan"
-            value={stats.avgInequality.toString()}
-              sub={
-                selectedProvinces.length === 0
-                  ? 'Semua Provinsi'
-                  : selectedProvinces.length === 1
-                    ? selectedProvinces[0]
-                    : `${selectedProvinces.length} Provinsi`
-              }
-            accent="bg-orange-500"
-          />
-        </div>
-
-        {/* Map + Dashboard side-by-side on desktop */}
-        <div className="flex flex-col lg:flex-row gap-5 flex-1">
-          {/* Map – takes 60% on desktop */}
-          <div className="lg:flex-[3] h-[450px] lg:h-auto min-h-[400px]">
-            <Suspense fallback={sectionLoader}>
-              <Map data={data} selected={selectedProvinces} onSelect={handleSelect} />
-            </Suspense>
+        <aside
+          className={`pointer-events-auto absolute left-2.5 sm:left-3 top-[120px] ${isLeftOpen ? 'w-[236px] sm:w-[248px]' : 'w-12 sm:w-14'} max-h-[calc(100vh-152px)] overflow-hidden rounded-[20px] bg-white/56 backdrop-blur-xl border border-white/55 shadow-[0_12px_30px_rgba(15,95,121,0.08)] ${isLeftOpen ? 'p-3' : 'p-1.5'} flex flex-col gap-3 transition-all duration-300 ease-in-out`}
+          style={{ willChange: 'width, padding, transform, opacity' }}
+        >
+          <div className="flex items-center justify-between gap-2 mb-0 cursor-pointer" onClick={() => setIsLeftOpen(!isLeftOpen)}>
+            <div className={`transition-all duration-300 ease-in-out transform ${isLeftOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2 pointer-events-none'}`}>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#0f5f79]">Infographic</p>
+              <h2 className="mt-1 text-lg font-bold text-slate-900">Ringkasan cepat</h2>
+              <p className="mt-1.5 text-xs text-slate-500">Pilih provinsi di peta atau gunakan filter untuk fokus ke wilayah tertentu.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="p-1.5 rounded-full hover:bg-white/60 text-slate-600 transition-colors shadow-sm bg-white/40 border border-white/50"
+                aria-label={isLeftOpen ? 'Tutup Infographic' : 'Buka Infographic'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-300 ${isLeftOpen ? 'rotate-90' : '-rotate-90'}`}>
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
           </div>
 
-          {/* Dashboard charts – takes 40% on desktop */}
-          <div className="lg:flex-[2] overflow-y-auto">
-            <Suspense fallback={sectionLoader}>
-              <Dashboard allData={data} selectedProvinces={selectedProvinces} />
-            </Suspense>
-          </div>
-        </div>
-      </main>
+          <div className={`transition-all duration-300 ease-in-out transform ${isLeftOpen ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2 pointer-events-none'}`}>
+            <Filter
+              provinces={data.map((d) => d.province)}
+              selected={primarySelected}
+              onChange={(province) => setSelectedProvinces(province ? [province] : [])}
+            />
 
-      {/* ── Footer ──────────────────────────────────────────────────────── */}
-      <footer className="bg-white border-t border-gray-200 py-3 text-center text-xs text-gray-400">
-        Geoquity – Proyek SIG 2026 · Kelompok 6
-      </footer>
+            <div className="grid grid-cols-2 gap-1.5 mt-3">
+              <div className="rounded-xl bg-[#eef8fb] p-3 border border-[#d8edf4]">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Provinsi aktif</p>
+                <p className="mt-1.5 text-xl font-bold text-slate-900">{selectedProvinces.length || data.length}</p>
+              </div>
+              <div className="rounded-xl bg-[#f7fbef] p-3 border border-[#e7f0cf]">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Data tampil</p>
+                <p className="mt-1.5 text-xl font-bold text-slate-900">{displayData.length}</p>
+              </div>
+            </div>
+
+            <div className="rounded-[16px] border border-slate-100 bg-slate-50/82 p-2.5 flex-1 min-h-0 overflow-auto mt-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700">Info pilihan</p>
+                <span className="text-xs text-slate-400">{selectedProvinces.length ? 'Aktif' : 'Semua'}</span>
+              </div>
+              <div className="mt-3 space-y-2 text-xs sm:text-sm text-slate-600">
+                <div className="rounded-xl bg-white p-2.5 shadow-sm border border-slate-100">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Wilayah</p>
+                  <p className="mt-1 font-semibold text-slate-900">
+                    {selectedProvinces.length === 0
+                      ? 'Seluruh Indonesia'
+                      : selectedProvinces.length === 1
+                        ? selectedProvinces[0]
+                        : `${selectedProvinces.length} provinsi terpilih`}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white p-2.5 shadow-sm border border-slate-100">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Kemiskinan</p>
+                  <p className="mt-1 font-semibold text-slate-900">{stats.avgPoverty}%</p>
+                </div>
+                <div className="rounded-xl bg-white p-2.5 shadow-sm border border-slate-100">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Pendapatan</p>
+                  <p className="mt-1 font-semibold text-slate-900">Rp {stats.avgIncome.toLocaleString('id-ID')} rb</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <aside className={`pointer-events-auto absolute right-2.5 sm:right-3 top-[120px] ${isRightOpen ? 'w-[158px] sm:w-[168px]' : 'w-12 sm:w-14'} max-h-[calc(100vh-152px)] overflow-hidden rounded-[20px] bg-white/56 backdrop-blur-xl border border-white/55 shadow-[0_12px_30px_rgba(15,95,121,0.08)] p-2.5 flex flex-col gap-2 transition-all duration-300 ease-in-out`}>
+          <div className="flex items-center justify-between gap-2 mb-0 cursor-pointer" onClick={() => setIsRightOpen(!isRightOpen)}>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="p-1.5 rounded-full hover:bg-white/60 text-slate-600 transition-colors shadow-sm bg-white/40 border border-white/50"
+                aria-label={isRightOpen ? 'Tutup Stats' : 'Buka Stats'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-300 ${isRightOpen ? '-rotate-90' : 'rotate-90'}`}>
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
+            <div className={`${isRightOpen ? '' : 'hidden'}`}>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#0f5f79]">Stats bar</p>
+              <h2 className="mt-1 text-sm sm:text-base font-bold text-slate-900">Rangkuman</h2>
+              <p className="mt-1 text-xs text-slate-500">Tiga kartu statistik utama.</p>
+            </div>
+            
+          </div>
+
+          <div className={`flex flex-col gap-2 overflow-auto pr-1 transition-opacity duration-300 ${isRightOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            {statsCards.map((card) => (
+              <StatsCard
+                key={card.title}
+                title={card.title}
+                value={card.value}
+                sub={
+                  selectedProvinces.length === 0
+                    ? 'Semua provinsi'
+                    : selectedProvinces.length === 1
+                      ? selectedProvinces[0]
+                      : `${selectedProvinces.length} provinsi`
+                }
+                accent={card.accent}
+              />
+            ))}
+          </div>
+        </aside>
+
+        <section className="pointer-events-auto absolute left-2.5 right-2.5 sm:left-[264px] sm:right-[180px] bottom-2.5 sm:bottom-3 z-20">
+          <div className={`rounded-[20px] border border-white/55 bg-white/54 backdrop-blur-xl shadow-[0_12px_30px_rgba(15,95,121,0.08)] p-2 sm:p-2.5 overflow-hidden transition-all duration-300 ease-in-out ${isTrayOpen ? 'h-[216px]' : 'h-[52px] sm:h-[56px]'}`}>
+            <div 
+              className="flex items-center justify-between gap-2 mb-2 cursor-pointer group" 
+              onClick={() => setIsTrayOpen(!isTrayOpen)}
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#0f5f79]">Bottom tray</p>
+                <h3 className="mt-0.5 text-sm sm:text-base font-bold text-slate-900">Grafik horizontal</h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="hidden sm:block text-xs text-slate-500 transition-opacity duration-300" style={{ opacity: isTrayOpen ? 1 : 0 }}>Scroll kanan untuk grafik</span>
+                <button
+                  type="button"
+                  className="p-1.5 rounded-full hover:bg-white/60 text-slate-600 transition-colors shadow-sm bg-white/40 border border-white/50"
+                  aria-label={isTrayOpen ? "Tutup Tray" : "Buka Tray"}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-300 ${isTrayOpen ? '' : 'rotate-180'}`}>
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className={`h-[158px] overflow-x-auto overflow-y-hidden pb-1 transition-opacity duration-300 ${isTrayOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <div className="flex gap-4 min-w-max snap-x snap-mandatory">
+                <div className="snap-start min-w-[340px] lg:min-w-[460px] xl:min-w-[560px]">
+                  <Suspense fallback={sectionLoader}>
+                    <Dashboard allData={data} selectedProvinces={selectedProvinces} />
+                  </Suspense>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { FeatureCollection, Geometry } from 'geojson';
 import rawGeoJsonUrl from './indonesia-provinces.json?url';
+import rawPre2024GeoJsonUrl from './indonesia-provinces-pre2024.json?url';
 
 type RawProvinceProperties = {
   ID?: number;
@@ -16,52 +17,46 @@ type NormalizedProvinceProperties = RawProvinceProperties & {
 
 type NormalizedProvinceGeoJson = FeatureCollection<Geometry, NormalizedProvinceProperties>;
 
+// Keys are normalized form (uppercase, dots removed, single spaces), e.g. 'KEPULAUAN RIAU'
 const provinceNameMap: Record<string, string> = {
-  'BALI': 'Bali',
-  'BANGKA BELITUNG': 'Kepulauan Bangka Belitung',
-  'BENGKULU': 'Bengkulu',
-  'DAERAH KHUSUS IBUKOTA JAKARTA': 'DKI Jakarta',
-  'DAERAH ISTIMEWA YOGYAKARTA': 'DI Yogyakarta',
-  'DI YOGYAKARTA': 'DI Yogyakarta',
-  'DI. ACEH': 'Aceh',
-  'DI ACEH': 'Aceh',
-  'DKI JAKARTA': 'DKI Jakarta',
-  'GORONTALO': 'Gorontalo',
-  'IRIAN JAYA': 'Papua',
-  'IRIAN JAYA BARAT': 'Papua Barat',
-  'PAPUA BARAT': 'Papua Barat',
-  'IRIAN JAYA TENGAH': 'Papua Tengah',
-  'IRIAN JAYA TIMUR': 'Papua',
+  'ACEH': 'Aceh',
+  'SUMATERA UTARA': 'Sumatera Utara',
+  'SUMATERA BARAT': 'Sumatera Barat',
+  'RIAU': 'Riau',
+  'KEPULAUAN RIAU': 'Kepulauan Riau',
   'JAMBI': 'Jambi',
+  'BENGKULU': 'Bengkulu',
+  'SUMATERA SELATAN': 'Sumatera Selatan',
+  'KEPULAUAN BANGKA BELITUNG': 'Kepulauan Bangka Belitung',
+  'LAMPUNG': 'Lampung',
+  'BANTEN': 'Banten',
+  'DKI JAKARTA': 'DKI Jakarta',
   'JAWA BARAT': 'Jawa Barat',
   'JAWA TENGAH': 'Jawa Tengah',
+  'DI YOGYAKARTA': 'DI Yogyakarta',
   'JAWA TIMUR': 'Jawa Timur',
-  'KALIMANTAN BARAT': 'Kalimantan Barat',
-  'KALIMANTAN SELATAN': 'Kalimantan Selatan',
-  'KALIMANTAN TENGAH': 'Kalimantan Tengah',
-  'KALIMANTAN TIMUR': 'Kalimantan Timur',
-  'KALIMANTAN UTARA': 'Kalimantan Utara',
-  'KEPULAUAN RIAU': 'Kepulauan Riau',
-  'LAMPUNG': 'Lampung',
-  'MALUKU': 'Maluku',
-  'MALUKU UTARA': 'Maluku Utara',
+  'BALI': 'Bali',
   'NUSA TENGGARA BARAT': 'Nusa Tenggara Barat',
   'NUSA TENGGARA TIMUR': 'Nusa Tenggara Timur',
-  'NUSATENGGARA BARAT': 'Nusa Tenggara Barat',
-  'PAPUA BARAT DAYA': 'Papua Barat',
-  'PAPUA PEGUNUNGAN': 'Papua',
-  'PAPUA SELATAN': 'Papua',
-  'PAPUA TENGAH': 'Papua',
-  'PROBANTEN': 'Banten',
-  'RIAU': 'Riau',
-  'SULAWESI SELATAN': 'Sulawesi Selatan',
-  'SULAWESI BARAT': 'Sulawesi Barat',
-  'SULAWESI TENGAH': 'Sulawesi Tengah',
-  'SULAWESI TENGGARA': 'Sulawesi Tenggara',
+  'KALIMANTAN BARAT': 'Kalimantan Barat',
+  'KALIMANTAN TENGAH': 'Kalimantan Tengah',
+  'KALIMANTAN SELATAN': 'Kalimantan Selatan',
+  'KALIMANTAN TIMUR': 'Kalimantan Timur',
+  'KALIMANTAN UTARA': 'Kalimantan Utara',
   'SULAWESI UTARA': 'Sulawesi Utara',
-  'SUMATERA BARAT': 'Sumatera Barat',
-  'SUMATERA SELATAN': 'Sumatera Selatan',
-  'SUMATERA UTARA': 'Sumatera Utara',
+  'SULAWESI TENGAH': 'Sulawesi Tengah',
+  'SULAWESI SELATAN': 'Sulawesi Selatan',
+  'SULAWESI TENGGARA': 'Sulawesi Tenggara',
+  'SULAWESI BARAT': 'Sulawesi Barat',
+  'GORONTALO': 'Gorontalo',
+  'MALUKU': 'Maluku',
+  'MALUKU UTARA': 'Maluku Utara',
+  'PAPUA': 'Papua',
+  'PAPUA BARAT': 'Papua Barat',
+  'PAPUA TENGAH': 'Papua Tengah',
+  'PAPUA PEGUNUNGAN': 'Papua Pegunungan',
+  'PAPUA SELATAN': 'Papua Selatan',
+  'PAPUA BARAT DAYA': 'Papua Barat Daya',
 };
 
 function toTitleCase(value: string): string {
@@ -75,11 +70,24 @@ function toTitleCase(value: string): string {
 export function normalizeProvinceName(rawName?: string): string {
   if (!rawName) return '';
 
-  const normalizedKey = rawName.trim().toUpperCase().replace(/\./g, '').replace(/\s+/g, ' ');
+  // Normalize: uppercase, remove dots, expand common abbreviations (KEP → KEPULAUAN),
+  // collapse whitespace. This produces keys matching `provinceNameMap` above.
+  let normalizedKey = rawName.trim().toUpperCase();
+  normalizedKey = normalizedKey.replace(/\./g, '');
+  // Expand standalone 'KEP' abbreviation to 'KEPULAUAN'
+  normalizedKey = normalizedKey.replace(/\bKEP\b/g, 'KEPULAUAN');
+  // Normalize common long forms to canonical short forms
+  // e.g. 'DAERAH ISTIMEWA YOGYAKARTA' -> 'DI YOGYAKARTA'
+  normalizedKey = normalizedKey.replace(/\bDAERAH ISTIMEWA\b/g, 'DI');
+  // e.g. 'DAERAH KHUSUS IBUKOTA JAKARTA' -> 'DKI JAKARTA'
+  normalizedKey = normalizedKey.replace(/\bDAERAH KHUSUS IBUKOTA\b/g, 'DKI');
+  normalizedKey = normalizedKey.replace(/\s+/g, ' ').trim();
+
   return provinceNameMap[normalizedKey] ?? toTitleCase(normalizedKey);
 }
 
-let cachedGeoJson: NormalizedProvinceGeoJson | null = null;
+// Cache the normalized GeoJSON by URL key so each variant is fetched once.
+const geoJsonCache = new Map<string, NormalizedProvinceGeoJson>();
 
 function normalizeGeoJson(
   featureCollection: FeatureCollection<Geometry, RawProvinceProperties>
@@ -96,15 +104,27 @@ function normalizeGeoJson(
   };
 }
 
-export async function loadIndonesiaProvinceGeoJson(): Promise<NormalizedProvinceGeoJson> {
-  if (cachedGeoJson) return cachedGeoJson;
+/**
+ * Load the Indonesia province GeoJSON appropriate for the given year.
+ *
+ * For years before 2024, the 6 post-pemekaran Papua provinces are merged
+ * back into the 2 original provinces (Papua and Papua Barat) to match
+ * the administrative boundaries that were in effect at the time.
+ */
+export async function loadIndonesiaProvinceGeoJson(year?: number): Promise<NormalizedProvinceGeoJson> {
+  const isPre2024 = year != null && year < 2024;
+  const url = isPre2024 ? rawPre2024GeoJsonUrl : rawGeoJsonUrl;
 
-  const response = await fetch(rawGeoJsonUrl);
+  const cached = geoJsonCache.get(url);
+  if (cached) return cached;
+
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to load province GeoJSON: ${response.status}`);
   }
 
   const rawGeoJson = (await response.json()) as FeatureCollection<Geometry, RawProvinceProperties>;
-  cachedGeoJson = normalizeGeoJson(rawGeoJson);
-  return cachedGeoJson;
+  const normalized = normalizeGeoJson(rawGeoJson);
+  geoJsonCache.set(url, normalized);
+  return normalized;
 }
