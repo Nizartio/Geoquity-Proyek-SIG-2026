@@ -3,7 +3,7 @@ import L, { GeoJSON as LeafletGeoJSON } from 'leaflet';
 import type { FeatureCollection, Geometry } from 'geojson';
 import 'leaflet/dist/leaflet.css';
 import type { ProvinceData } from '../utils/inequality';
-import { getColor, getScale } from '../utils/colorScale';
+import { getColor, getScale, MapMetric } from '../utils/colorScale';
 import { loadIndonesiaProvinceGeoJson, normalizeProvinceName } from '../data/indonesia-province-normalized';
 
 const INDONESIA_CENTER: L.LatLngExpression = [-2.5, 118];
@@ -20,6 +20,8 @@ interface MapProps {
   onSelect: (province: string, additive: boolean) => void;
   /** Selected year — controls which provincial boundaries are shown */
   year: number;
+  /** Currently selected metric for coloring */
+  metric: MapMetric;
 }
 
 /**
@@ -29,7 +31,7 @@ interface MapProps {
  * - Shows a tooltip on hover (province name + key indicators)
  * - Fires onSelect when a province is clicked
  */
-export default function Map({ data, selected, onSelect, recenterSignal = 0, year }: MapProps) {
+export default function Map({ data, selected, onSelect, recenterSignal = 0, year, metric }: MapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const geoLayerRef = useRef<LeafletGeoJSON | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,7 +41,7 @@ export default function Map({ data, selected, onSelect, recenterSignal = 0, year
 
   /** Build a lookup map for O(1) access by province name */
   const dataMap = Object.fromEntries(data.map((d) => [normalizeProvinceName(d.province), d]));
-  const colorScale = getScale();
+  const colorScale = getScale(metric);
 
   // ── Initialise map once ──────────────────────────────────────────────────
   useEffect(() => {
@@ -100,7 +102,7 @@ export default function Map({ data, selected, onSelect, recenterSignal = 0, year
         const isSelected = !!name && selected.includes(name);
 
         return {
-          fillColor: record ? getColor(record.poverty) : '#cccccc',
+          fillColor: record ? getColor(metric === 'income' ? record.income : metric === 'inequality' ? (record.inequality || 0) : record.poverty, metric) : '#cccccc',
           fillOpacity: 0.75,
           color: isSelected ? '#1d4ed8' : '#555',
           weight: isSelected ? 3 : 1,
@@ -120,7 +122,7 @@ export default function Map({ data, selected, onSelect, recenterSignal = 0, year
                <p class="font-bold text-gray-800">${name}</p>
                <p>Kemiskinan: <strong>${record.poverty}%</strong></p>
                <p>Pendapatan: <strong>Rp ${record.income.toLocaleString('id-ID')} rb</strong></p>
-               <p>Indeks Ketimpangan: <strong>${record.inequality?.toFixed(1)}</strong></p>
+               <p>Indeks Ketimpangan: <strong>${record.inequality?.toFixed(3)}</strong></p>
              </div>`
           : `<strong>${name}</strong><br/>Data tidak tersedia`;
 
@@ -149,7 +151,7 @@ export default function Map({ data, selected, onSelect, recenterSignal = 0, year
 
     layer.addTo(map);
     geoLayerRef.current = layer;
-  }, [data, selected, dataMap, onSelect, geoJsonData]);
+  }, [data, selected, dataMap, onSelect, geoJsonData, metric]);
 
   const recenterToIndonesia = useCallback(() => {
     const map = mapRef.current;
@@ -177,7 +179,9 @@ export default function Map({ data, selected, onSelect, recenterSignal = 0, year
 
       {/* Colour legend */}
       <div className="absolute bottom-3 right-3 bg-white/88 rounded-xl shadow p-2 text-[11px] z-[1000]">
-        <p className="font-semibold text-gray-700 mb-1">Kemiskinan (%)</p>
+        <p className="font-semibold text-gray-700 mb-1">
+          {metric === 'poverty' ? 'Kemiskinan (%)' : metric === 'income' ? 'Pendapatan (rb)' : 'Indeks Ketimpangan'}
+        </p>
         {[...colorScale].reverse().map(({ color, label }) => (
           <div key={label} className="flex items-center gap-1 mt-0.5">
             <span className="w-3 h-3 rounded-sm inline-block" style={{ background: color }} />

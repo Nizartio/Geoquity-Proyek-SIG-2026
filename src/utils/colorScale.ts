@@ -5,32 +5,54 @@
  * from light yellow (low) to dark red (severe).
  */
 
-import { CHOROPLETH_SCALE, CHOROPLETH_COLORS, SEVERITY } from './colors';
+import { CHOROPLETH_SCALE_POVERTY, CHOROPLETH_SCALE_INCOME, CHOROPLETH_SCALE_INEQUALITY, CHOROPLETH_COLORS, SEVERITY, GREEN_SEVERITY, BLUE_SEVERITY } from './colors';
+
+export type MapMetric = 'poverty' | 'income' | 'inequality';
 
 /** Threshold-based color scale for poverty rate (%) (derived from named colors) */
-const SCALE: Array<{ threshold: number; color: string; colorName: keyof typeof SEVERITY; label: string }> = CHOROPLETH_SCALE.map((s) => ({
+const SCALE_POVERTY = CHOROPLETH_SCALE_POVERTY.map((s) => ({
   threshold: s.threshold,
-  colorName: s.colorName,
-  color: CHOROPLETH_COLORS[CHOROPLETH_SCALE.indexOf(s)],
+  color: SEVERITY[s.colorName],
   label: s.label,
 }));
 
+const SCALE_INCOME = CHOROPLETH_SCALE_INCOME.map((s) => ({
+  threshold: s.threshold,
+  color: GREEN_SEVERITY[s.colorName],
+  label: s.label,
+}));
+
+const SCALE_INEQUALITY = CHOROPLETH_SCALE_INEQUALITY.map((s) => ({
+  threshold: s.threshold,
+  color: BLUE_SEVERITY[s.colorName],
+  label: s.label,
+}));
+
+
 /**
- * Map a poverty-rate value to a fill color.
- * @param value  Poverty rate in percent
+ * Map a metric value to a fill color.
+ * @param value  The metric value
+ * @param metric The selected metric
  * @returns      Hex color string
  */
-export function getColor(value: number): string {
+export function getColor(value: number, metric: MapMetric = 'poverty'): string {
+  let scale: Array<{ threshold: number; color: string; label: string }> = SCALE_POVERTY;
+  if (metric === 'income') scale = SCALE_INCOME;
+  if (metric === 'inequality') scale = SCALE_INEQUALITY;
+
   // Walk scale in reverse so the highest threshold wins
-  for (let i = SCALE.length - 1; i >= 0; i--) {
-    if (value >= SCALE[i].threshold) return SCALE[i].color;
+  for (let i = scale.length - 1; i >= 0; i--) {
+    if (value >= scale[i].threshold) return scale[i].color;
   }
-  return SCALE[0].color;
+  return scale[0].color;
 }
 
 /**
  * Returns the full scale array (useful for rendering a legend).
  */
-export function getScale() {
-  return SCALE.map((s) => ({ threshold: s.threshold, color: s.color, colorName: s.colorName, label: s.label }));
+export function getScale(metric: MapMetric = 'poverty') {
+  let scale: Array<{ threshold: number; color: string; label: string }> = SCALE_POVERTY;
+  if (metric === 'income') scale = SCALE_INCOME;
+  if (metric === 'inequality') scale = SCALE_INEQUALITY;
+  return scale.map((s) => ({ threshold: s.threshold, color: s.color, label: s.label }));
 }

@@ -1,19 +1,15 @@
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
   Legend,
+  Tooltip,
+  ResponsiveContainer,
 } from 'recharts';
 import type { ProvinceData } from '../utils/inequality';
 import { pieColorsFor } from '../utils/palettes';
 import { CHOROPLETH_COLORS } from '../utils/colors';
+import { BLUE_SEVERITY, GREEN_SEVERITY } from '../utils/colors';
 
 interface DashboardProps {
   /** Full dataset (all provinces) */
@@ -22,14 +18,6 @@ interface DashboardProps {
   selectedProvinces: string[];
 }
 
-
-
-/**
- * Dashboard panel containing:
- *  - Bar chart: poverty rate per province (top 10)
- *  - Pie chart: share of top-5 poverty provinces
- *  - Scatter/bar chart: inequality index per province
- */
 export default function Dashboard({ allData, selectedProvinces }: DashboardProps) {
   const hasSelection = selectedProvinces.length > 0;
   const chartHeight = hasSelection ? 96 : 112;
@@ -37,134 +25,103 @@ export default function Dashboard({ allData, selectedProvinces }: DashboardProps
     ? allData.filter((d) => selectedProvinces.includes(d.province))
     : allData;
 
-  // When provinces are selected, show only selected rows; otherwise show top-10 by poverty
-  const chartData = hasSelection
-    ? filteredData
-    : [...allData].sort((a, b) => b.poverty - a.poverty).slice(0, 10);
+  // Top 5 Poverty
+  const top5Poverty = [...filteredData].sort((a, b) => b.poverty - a.poverty).slice(0, 5);
+  const pieColorsPoverty = pieColorsFor(top5Poverty.map((d) => d.poverty));
 
-  const inequalityData = hasSelection
-    ? filteredData
-    : [...allData].sort((a, b) => (b.inequality ?? 0) - (a.inequality ?? 0)).slice(0, 10);
+  // Top 5 Income
+  const top5Income = [...filteredData].sort((a, b) => b.income - a.income).slice(0, 5);
+  const pieColorsIncome = [
+    GREEN_SEVERITY.extreme,
+    GREEN_SEVERITY.veryDark,
+    GREEN_SEVERITY.dark,
+    GREEN_SEVERITY.midDark,
+    GREEN_SEVERITY.mid,
+  ];
 
-  // Top-5 provinces by poverty (used by the pie chart)
-  const top5 = [...allData].sort((a, b) => b.poverty - a.poverty).slice(0, 5);
-  const pieColors = pieColorsFor(top5.map((d) => d.poverty));
+  // Top 5 Inequality
+  const top5Inequality = [...filteredData].sort((a, b) => (b.inequality ?? 0) - (a.inequality ?? 0)).slice(0, 5);
+  const pieColorsInequality = [
+    BLUE_SEVERITY.extreme,
+    BLUE_SEVERITY.veryDark,
+    BLUE_SEVERITY.dark,
+    BLUE_SEVERITY.midDark,
+    BLUE_SEVERITY.mid,
+  ];
 
-  // Shorten province names for the axis (remove common words)
-  const shorten = (name: string) =>
-    name
-      .replace('Kepulauan ', 'Kep. ')
-      .replace('Kalimantan ', 'Kal. ')
-      .replace('Sulawesi ', 'Sul. ')
-      .replace('Sumatera ', 'Sum. ')
-      .replace('Nusa Tenggara ', 'NT');
+  const renderPieChart = (
+    title: string,
+    data: ProvinceData[],
+    dataKey: keyof ProvinceData,
+    colors: string[],
+    formatter: (val: number) => [string, string]
+  ) => (
+    <div className="min-w-[320px] xl:min-w-[360px] rounded-xl bg-white/86 backdrop-blur border border-white/65 shadow p-2">
+      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 leading-snug">
+        {hasSelection
+          ? `${title} - ${selectedProvinces.length} Terpilih (Top 5)`
+          : `${title} - 5 Provinsi Teratas`}
+      </h3>
+      <ResponsiveContainer width="100%" height={chartHeight}>
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey={dataKey}
+            nameKey="province"
+            cx="35%"
+            cy="50%"
+            innerRadius={chartHeight === 96 ? 18 : 24}
+            outerRadius={chartHeight === 96 ? 28 : 36}
+            labelLine={false}
+          >
+            {data.map((_, i) => (
+              <Cell key={`cell-${i}`} fill={colors[i] ?? '#ccc'} />
+            ))}
+          </Pie>
+          <Legend
+            layout="vertical"
+            verticalAlign="middle"
+            align="right"
+            wrapperStyle={{
+              fontSize: 10,
+              right: 10,
+              top: 0,
+              bottom: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              lineHeight: '1.2',
+            }}
+          />
+          <Tooltip formatter={(value: number) => formatter(value)} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
 
   return (
     <div className="flex gap-2 min-w-max">
-      {/* ── Bar Chart: Poverty Rate ───────────────────────────────────────── */}
-      <div className="min-w-[260px] xl:min-w-[300px] rounded-xl bg-white/86 backdrop-blur border border-white/65 shadow p-2">
-        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 leading-snug">
-          {hasSelection
-            ? selectedProvinces.length === 1
-              ? `Tingkat Kemiskinan - ${selectedProvinces[0]}`
-              : `Tingkat Kemiskinan - ${selectedProvinces.length} Provinsi Terpilih`
-            : 'Tingkat Kemiskinan (Top 10 Tertinggi)'}
-        </h3>
-        <ResponsiveContainer width="100%" height={chartHeight}>
-          <BarChart data={chartData} margin={{ top: 2, right: 2, left: -22, bottom: 40 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-            <XAxis
-              dataKey="province"
-              tick={{ fontSize: 9 }}
-              tickFormatter={shorten}
-              angle={-45}
-              textAnchor="end"
-              interval={0}
-            />
-            <YAxis
-              width={50}
-              tick={{ fontSize: 9 }}
-              tickFormatter={(v: number) => `${v.toFixed(1)}%`}
-              domain={[0, 'dataMax + 2']}
-            />
-            <Tooltip
-              formatter={(value: number) => [`${value}%`, 'Kemiskinan']}
-              contentStyle={{ borderRadius: 8, fontSize: 12 }}
-            />
-            <Bar dataKey="poverty" fill="#f03b20" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* ── Pie Chart: Top-5 poverty share ───────────────────────────────── */}
-      {!hasSelection && (
-        <div className="min-w-[320px] xl:min-w-[360px] rounded-xl bg-white/86 backdrop-blur border border-white/65 shadow p-2">
-          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 leading-snug">
-            Distribusi Kemiskinan – 5 Provinsi Teratas
-          </h3>
-          <ResponsiveContainer width="100%" height={chartHeight}>
-            <PieChart>
-              <Pie
-                data={[...allData].sort((a, b) => b.poverty - a.poverty).slice(0, 5)}
-                dataKey="poverty"
-                nameKey="province"
-                cx="35%"
-                cy="50%"
-                innerRadius={chartHeight === 96 ? 18 : 24}
-                outerRadius={chartHeight === 96 ? 28 : 36}
-                labelLine={false}
-              >
-                {top5.map((_, i) => (
-                  <Cell
-                    key={`cell-${i}`}
-                    fill={pieColors[i] ?? CHOROPLETH_COLORS[i % CHOROPLETH_COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Legend 
-                layout="vertical" 
-                verticalAlign="middle" 
-                align="right" 
-                wrapperStyle={{ fontSize: 10, right: 10, top: 0, bottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', lineHeight: '1.2' }} 
-              />
-              <Tooltip
-                formatter={(value: number) => [`${value}%`, 'Kemiskinan']}
-                contentStyle={{ borderRadius: 8, fontSize: 12 }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+      {renderPieChart(
+        'Distribusi Kemiskinan',
+        top5Poverty,
+        'poverty',
+        pieColorsPoverty.map((c, i) => c ?? CHOROPLETH_COLORS[i % CHOROPLETH_COLORS.length]),
+        (val) => [`${val}%`, 'Kemiskinan']
       )}
-
-      {/* ── Bar Chart: Inequality Index ───────────────────────────────────── */}
-      <div className="min-w-[260px] xl:min-w-[300px] rounded-xl bg-white/86 backdrop-blur border border-white/65 shadow p-2">
-        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 leading-snug">
-          {hasSelection
-            ? selectedProvinces.length === 1
-              ? `Indeks Ketimpangan - ${selectedProvinces[0]}`
-              : `Indeks Ketimpangan - ${selectedProvinces.length} Provinsi Terpilih`
-            : 'Indeks Ketimpangan (Top 10 Tertinggi)'}
-        </h3>
-        <ResponsiveContainer width="100%" height={chartHeight}>
-          <BarChart data={inequalityData} margin={{ top: 2, right: 2, left: -22, bottom: 40 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-            <XAxis
-              dataKey="province"
-              tick={{ fontSize: 9 }}
-              tickFormatter={shorten}
-              angle={-45}
-              textAnchor="end"
-              interval={0}
-            />
-            <YAxis width={40} tick={{ fontSize: 9 }} domain={[0, 'auto']} />
-            <Tooltip
-              formatter={(value: number) => [value.toFixed(3), 'Indeks Ketimpangan']}
-              contentStyle={{ borderRadius: 8, fontSize: 12 }}
-            />
-            <Bar dataKey="inequality" fill="#bd0026" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      {renderPieChart(
+        'Distribusi Pendapatan',
+        top5Income,
+        'income',
+        pieColorsIncome,
+        (val) => [`Rp ${val.toLocaleString('id-ID')} rb`, 'Pendapatan']
+      )}
+      {renderPieChart(
+        'Distribusi Ketimpangan',
+        top5Inequality,
+        'inequality',
+        pieColorsInequality,
+        (val) => [val.toFixed(3), 'Indeks Ketimpangan']
+      )}
     </div>
   );
 }
