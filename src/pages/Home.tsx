@@ -4,6 +4,7 @@ import Filter from '../components/Filter';
 import YearSlider from '../components/YearSlider';
 import { fetchProvinceData, fetchYearRange } from '../services/api';
 import { computeStats, type ProvinceData } from '../utils/inequality';
+import type { MapMetric } from '../utils/colorScale';
 
 const Map = lazy(() => import('../components/Map'));
 const Dashboard = lazy(() => import('../components/Dashboard'));
@@ -12,6 +13,7 @@ export default function Home() {
   const [year, setYear] = useState<number>(2025);
   const [minYear, setMinYear] = useState<number>(2020);
   const [maxYear, setMaxYear] = useState<number>(2025);
+  const [metric, setMetric] = useState<MapMetric>('poverty');
   const [data, setData] = useState<ProvinceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export default function Home() {
       {
         title: 'Indeks Ketimpangan',
         value: stats.avgInequality.toString(),
-        accent: 'bg-amber-500',
+        accent: 'bg-blue-500',
       },
     ],
     [stats.avgIncome, stats.avgInequality, stats.avgPoverty]
@@ -127,7 +129,7 @@ export default function Home() {
     <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_#dbeaf4,_#eef4f8_40%,_#d3e0eb_100%)] text-slate-900">
       <div className="absolute inset-0 z-0">
         <Suspense fallback={sectionLoader}>
-          <Map data={data} selected={selectedProvinces} onSelect={handleSelect} recenterSignal={recenterSignal} year={year} />
+          <Map data={data} selected={selectedProvinces} onSelect={handleSelect} recenterSignal={recenterSignal} year={year} metric={metric} />
         </Suspense>
       </div>
 
@@ -148,6 +150,15 @@ export default function Home() {
                 Data: BPS {year}
               </span>
               <YearSlider min={minYear} max={maxYear} value={year} onChange={setYear} />
+              <select 
+                value={metric} 
+                onChange={(e) => setMetric(e.target.value as MapMetric)}
+                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600 hover:bg-slate-50 outline-none cursor-pointer text-xs sm:text-sm shadow-sm"
+              >
+                <option value="poverty">Kemiskinan</option>
+                <option value="income">Pendapatan Per Kapita</option>
+                <option value="inequality">Indeks Ketimpangan</option>
+              </select>
             <div className="flex flex-col gap-1 sm:gap-2">
               <button
               type="button"
